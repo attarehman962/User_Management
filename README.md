@@ -20,18 +20,13 @@ The app manages users with these fields:
 - `name`
 - `email`
 
-The current code implements:
+The current code implements full CRUD:
 
 - `Create` a user
 - `Read` all users
 - `Read` one user by ID
-- `Delete` a user
-
-So right now this project is `CRD`, not full `CRUD` yet.
-
-The missing part is:
-
 - `Update` a user
+- `Delete` a user
 
 ## Main Goal Of This Project
 
@@ -54,6 +49,23 @@ This project teaches the full path of an API request:
 - `alembic/env.py`: Alembic migration environment
 - `alembic.ini`: Alembic config file
 - `README.md`: learning guide for the project
+- `requirements.txt`: installable Python dependencies for the backend
+
+## Quick Setup
+
+If you are starting this project on a fresh machine, install the dependencies first:
+
+```bash
+pip install -r requirements.txt
+```
+
+Then run the app with:
+
+```bash
+./venv/bin/uvicorn main:app --reload
+```
+
+If you want to use PostgreSQL instead of the default SQLite file, set `DATABASE_URL` before starting the app.
 
 ## Best Reading Order
 
@@ -181,6 +193,27 @@ Important ideas:
 - searching by primary key value
 - `404` for missing resources
 
+### `PUT /users/{user_id}`
+
+This route updates one existing user.
+
+Flow:
+
+1. Find the user by ID
+2. If not found, return `404`
+3. Accept a new `name`, a new `email`, or both
+4. If the new email belongs to another user, return `409`
+5. Apply only the fields sent in the request
+6. Commit the transaction
+7. Refresh and return the updated user
+
+Important ideas:
+
+- update-specific request schema
+- partial field updates with `model_dump(exclude_unset=True, exclude_none=True)`
+- duplicate email protection during update
+- using `setattr()` to apply changed values
+
 ### `DELETE /users/{user_id}`
 
 This route deletes one user.
@@ -199,24 +232,7 @@ Important ideas:
 - committing destructive changes
 - returning simple structured JSON
 
-## 3. Missing Route For Full CRUD
-
-To make the project full CRUD, the missing route is:
-
-- `PUT /users/{user_id}` or `PATCH /users/{user_id}`
-
-That route should:
-
-1. find the user
-2. return `404` if not found
-3. accept updated `name`, `email`, or both
-4. reject duplicate emails with `409`
-5. save changes with `commit()`
-6. return the updated user
-
-If you want, this is the next best feature to implement in the code.
-
-## 4. Error Handling In `main.py`
+## 3. Error Handling In `main.py`
 
 The app catches database errors and turns them into API responses.
 
@@ -235,7 +251,7 @@ Important action:
 
 - `db.rollback()` resets a broken transaction before continuing
 
-## 5. `schemas.py`: The Validation Layer
+## 4. `schemas.py`: The Validation Layer
 
 `schemas.py` defines the shapes of data that enter and leave the API.
 
@@ -276,6 +292,17 @@ Why inheritance is helpful:
 - shared validation stays in one place
 - future create-only fields can be added easily
 
+### `UserUpdate`
+
+`UserUpdate` is the schema used by the `PUT /users/{user_id}` endpoint.
+
+Why it is different from `UserCreate`:
+
+- both fields are optional
+- the client can send only the values that should change
+- the schema still validates email format and trims `name`
+- the schema rejects completely empty update requests
+
 ### `UserResponse`
 
 This is the schema used when sending user data back to the client.
@@ -310,7 +337,7 @@ Example:
 }
 ```
 
-## 6. `models.py`: The Database Model
+## 5. `models.py`: The Database Model
 
 `models.py` defines the SQLAlchemy ORM model.
 
@@ -337,7 +364,7 @@ A very important lesson here is that the project protects data in two places:
 
 That combination is good backend practice.
 
-## 7. `database.py`: Database Setup
+## 6. `database.py`: Database Setup
 
 `database.py` configures SQLAlchemy.
 
@@ -393,7 +420,7 @@ That metadata is used for:
 - schema tracking
 - Alembic migration support
 
-## 8. Request Flow Example
+## 7. Request Flow Example
 
 Here is the full request flow for `POST /users`.
 
@@ -428,7 +455,7 @@ Here is the full request flow for `POST /users`.
 }
 ```
 
-## 9. `tests/test_app.py`: Behavior Proof
+## 8. `tests/test_app.py`: Behavior Proof
 
 The tests are especially useful for learning because they show what the project is expected to do.
 
@@ -437,8 +464,9 @@ The current tests check:
 - create a user
 - list users
 - fetch a user
+- update a user
+- reject duplicate emails on create or update with `409`
 - delete a user
-- duplicate email returns `409`
 - missing user returns `404`
 
 The tests use a temporary SQLite database.
@@ -449,7 +477,7 @@ Why that is good:
 - every test starts clean
 - results are repeatable
 
-## 10. Alembic Files
+## 9. Alembic Files
 
 `alembic/env.py` and `alembic.ini` are part of the migration system.
 
@@ -467,7 +495,7 @@ Important idea:
 
 You do not need deep Alembic knowledge to understand the current app, but it is good to know why those files exist.
 
-## 11. HTTP Status Codes Used Here
+## 10. HTTP Status Codes Used Here
 
 This project already shows some useful API design choices:
 
@@ -478,9 +506,15 @@ This project already shows some useful API design choices:
 
 These status codes help clients understand what happened.
 
-## 12. How To Run The App
+## 11. How To Run The App
 
-From the project directory:
+From the project directory, make sure the dependencies are installed:
+
+```bash
+pip install -r requirements.txt
+```
+
+Then start the server:
 
 ```bash
 ./venv/bin/uvicorn main:app --reload
@@ -499,7 +533,7 @@ That page is very helpful for learning because you can:
 - see response schemas
 - test API calls interactively
 
-## 13. Good Practice Exercises
+## 12. Good Practice Exercises
 
 If you want to understand this project deeply, try these exercises:
 
@@ -508,9 +542,11 @@ If you want to understand this project deeply, try these exercises:
 3. Try an invalid email.
 4. Try a blank name.
 5. Fetch a user that does not exist.
-6. Delete an existing user.
-7. Add a new field like `age` and follow what files must change.
-8. Implement the missing update route.
+6. Update only a user's name with `PUT /users/{user_id}`.
+7. Update only a user's email with `PUT /users/{user_id}`.
+8. Try updating a user with another user's email and observe the `409`.
+9. Delete an existing user.
+10. Add a new field like `age` and follow what files must change.
 
 For each experiment, ask yourself:
 
@@ -518,42 +554,26 @@ For each experiment, ask yourself:
 - was validation done by FastAPI, Pydantic, or the database?
 - what response model shaped the output?
 
-## 14. How To Make This Full CRUD
+## 13. How Full CRUD Works Here
 
-To complete CRUD, you can add two things:
+This project now includes all four CRUD operations:
 
-### Add an update schema
+- Create: `POST /users`
+- Read: `GET /users` and `GET /users/{user_id}`
+- Update: `PUT /users/{user_id}`
+- Delete: `DELETE /users/{user_id}`
 
-In `schemas.py`, add something like a `UserUpdate` model with optional fields.
+The most interesting one to study is usually `Update`, because it combines:
 
-Typical idea:
+- request validation
+- lookup by ID
+- duplicate email protection
+- selective field updates
+- transaction commit and refresh
 
-- `name: str | None = None`
-- `email: EmailStr | None = None`
+If you can explain the update flow clearly, you probably understand the whole project very well.
 
-### Add an update route
-
-In `main.py`, add:
-
-- `@app.put("/users/{user_id}")`
-
-Typical flow:
-
-1. find the user
-2. return `404` if missing
-3. update the changed fields
-4. prevent duplicate emails
-5. commit and refresh
-6. return the updated object
-
-Once that is added, the project becomes true CRUD:
-
-- Create
-- Read
-- Update
-- Delete
-
-## 15. Final Summary
+## 14. Final Summary
 
 This project is a strong beginner backend example because it teaches:
 
@@ -565,6 +585,4 @@ This project is a strong beginner backend example because it teaches:
 - how errors become HTTP responses
 - how tests verify behavior
 
-Right now, the project already teaches almost everything needed for a small backend app.
-
-The only missing CRUD piece is `Update`, which makes this an excellent next learning step.
+Right now, the project is a complete small CRUD backend and a strong learning example for FastAPI, Pydantic, and SQLAlchemy.

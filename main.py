@@ -88,6 +88,56 @@ def get_single_user(user_id: int, db: Session = Depends(get_db)):
     return user
 
 
+@app.put("/users/{user_id}", response_model=schemas.UserResponse)
+def update_user(
+    user_id: int,
+    user_update: schemas.UserUpdate,
+    db: Session = Depends(get_db),
+):
+    try:
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        if user_update.email and user_update.email != user.email:
+            existing_user = (
+                db.query(models.User)
+                .filter(
+                    models.User.email == user_update.email,
+                    models.User.id != user_id,
+                )
+                .first()
+            )
+            if existing_user:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Email already registered",
+                )
+
+        update_data = user_update.model_dump(exclude_unset=True, exclude_none=True)
+        for field, value in update_data.items():
+            setattr(user, field, value)
+
+        db.commit()
+        db.refresh(user)
+        return user
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered",
+        ) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error while updating the user",
+        ) from exc
+
+
 @app.delete("/users/{user_id}", response_model=schemas.MessageResponse)
 def delete_user(user_id: int, db: Session = Depends(get_db)):
     try:

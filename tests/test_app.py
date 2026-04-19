@@ -72,6 +72,52 @@ class UserManagementTests(unittest.TestCase):
         self.assertEqual(exc.exception.status_code, 409)
         self.assertEqual(exc.exception.detail, "Email already registered")
 
+    def test_update_user_name_and_email(self):
+        created_user = self.main.create_user(
+            self.schemas.UserCreate(name="Alice", email="alice@example.com"),
+            self.db,
+        )
+
+        updated_user = self.main.update_user(
+            created_user.id,
+            self.schemas.UserUpdate(name="Alice Cooper", email="acooper@example.com"),
+            self.db,
+        )
+
+        self.assertEqual(updated_user.name, "Alice Cooper")
+        self.assertEqual(updated_user.email, "acooper@example.com")
+
+    def test_update_user_with_conflicting_email_returns_conflict(self):
+        self.main.create_user(
+            self.schemas.UserCreate(name="Alice", email="alice@example.com"),
+            self.db,
+        )
+        second_user = self.main.create_user(
+            self.schemas.UserCreate(name="Bob", email="bob@example.com"),
+            self.db,
+        )
+
+        with self.assertRaises(self.main.HTTPException) as exc:
+            self.main.update_user(
+                second_user.id,
+                self.schemas.UserUpdate(email="alice@example.com"),
+                self.db,
+            )
+
+        self.assertEqual(exc.exception.status_code, 409)
+        self.assertEqual(exc.exception.detail, "Email already registered")
+
+    def test_update_missing_user_returns_not_found(self):
+        with self.assertRaises(self.main.HTTPException) as exc:
+            self.main.update_user(
+                999,
+                self.schemas.UserUpdate(name="Ghost User"),
+                self.db,
+            )
+
+        self.assertEqual(exc.exception.status_code, 404)
+        self.assertEqual(exc.exception.detail, "User not found")
+
     def test_missing_user_returns_not_found(self):
         with self.assertRaises(self.main.HTTPException) as exc:
             self.main.get_single_user(999, self.db)
