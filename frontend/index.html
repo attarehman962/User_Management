@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Dashboard</title>
+  <style>
+    :root {
+      --bg: #f4efe6;
+      --panel: #fffaf2;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --accent: #0f766e;
+      --accent-dark: #115e59;
+      --danger: #b91c1c;
+      --border: #e5d8c7;
+      --shadow: 0 18px 45px rgba(31, 41, 55, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(180, 83, 9, 0.12), transparent 32%),
+        var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    .shell {
+      width: min(1180px, calc(100% - 2rem));
+      margin: 2rem auto;
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    .hero,
+    .panel {
+      background: rgba(255, 250, 242, 0.9);
+      border: 1px solid rgba(229, 216, 199, 0.9);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+      border-radius: 24px;
+    }
+
+    .hero {
+      padding: 2rem;
+    }
+
+    .hero h1 {
+      margin: 0 0 0.4rem;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      line-height: 1;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 70ch;
+    }
+
+    .grid {
+      display: grid;
+      gap: 1.5rem;
+      grid-template-columns: 360px 1fr;
+    }
+
+    .panel {
+      padding: 1.25rem;
+    }
+
+    .panel h2,
+    .panel h3 {
+      margin: 0 0 1rem;
+      font-size: 1.1rem;
+    }
+
+    .stack {
+      display: grid;
+      gap: 0.9rem;
+    }
+
+    label {
+      display: grid;
+      gap: 0.35rem;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    input {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 0.85rem 0.95rem;
+      font: inherit;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    input:focus {
+      outline: 2px solid rgba(15, 118, 110, 0.18);
+      border-color: var(--accent);
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 0.85rem 1rem;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.2s ease, background 0.2s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    .primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .primary:hover {
+      background: var(--accent-dark);
+    }
+
+    .secondary {
+      background: #ece7df;
+      color: var(--ink);
+    }
+
+    .danger {
+      background: #fee2e2;
+      color: var(--danger);
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .status {
+      min-height: 1.25rem;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .status.success {
+      color: var(--accent-dark);
+    }
+
+    .users {
+      display: grid;
+      gap: 0.85rem;
+    }
+
+    .user-card {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 1rem;
+      background: white;
+      display: grid;
+      gap: 0.9rem;
+    }
+
+    .user-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .user-title {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+
+    .user-meta {
+      margin: 0.25rem 0 0;
+      color: var(--muted);
+      word-break: break-word;
+    }
+
+    .badge {
+      font-size: 0.82rem;
+      color: var(--accent-dark);
+      background: rgba(15, 118, 110, 0.1);
+      padding: 0.3rem 0.55rem;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .user-actions {
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+
+    .empty {
+      padding: 1rem;
+      border: 1px dashed var(--border);
+      border-radius: 18px;
+      text-align: center;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.65);
+    }
+
+    .token-box {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 0.9rem;
+      font-size: 0.85rem;
+      word-break: break-all;
+      color: var(--muted);
+    }
+
+    @media (max-width: 920px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <h1>User Dashboard</h1>
+      <p>
+        This version adds password hashing and JWT authentication. Register a user,
+        log in to get a token, then use that token to load and manage protected user data.
+      </p>
+    </section>
+
+    <section class="grid">
+      <aside class="panel stack">
+        <section>
+          <h2>Register</h2>
+          <form id="register-form" class="stack">
+            <label>
+              Name
+              <input id="register-name" name="name" type="text" placeholder="Ayesha Khan" required />
+            </label>
+            <label>
+              Email
+              <input id="register-email" name="email" type="email" placeholder="ayesha@example.com" required />
+            </label>
+            <label>
+              Password
+              <input id="register-password" name="password" type="password" placeholder="At least 8 characters" minlength="8" required />
+            </label>
+            <button class="primary" type="submit">Create Account</button>
+          </form>
+          <p id="register-status" class="status"></p>
+        </section>
+
+        <section>
+          <h2>Login</h2>
+          <form id="login-form" class="stack">
+            <label>
+              Email
+              <input id="login-email" name="email" type="email" placeholder="ayesha@example.com" required />
+            </label>
+            <label>
+              Password
+              <input id="login-password" name="password" type="password" placeholder="Your password" minlength="8" required />
+            </label>
+            <button class="primary" type="submit">Get Token</button>
+          </form>
+          <div class="toolbar" style="margin-top: 1rem; margin-bottom: 0.5rem;">
+            <h3 style="margin: 0;">JWT Token</h3>
+            <button id="logout-btn" class="secondary" type="button">Logout</button>
+          </div>
+          <div id="token-box" class="token-box">No token yet. Log in to unlock protected routes.</div>
+          <p id="auth-status" class="status"></p>
+        </section>
+      </aside>
+
+      <section class="panel">
+        <div class="toolbar">
+          <div>
+            <h2 style="margin: 0;">Protected Users List</h2>
+            <p style="margin: 0.2rem 0 0; color: var(--muted);">These actions require a valid JWT token.</p>
+          </div>
+          <button id="refresh-btn" class="secondary" type="button">Refresh</button>
+        </div>
+        <p id="list-status" class="status"></p>
+        <div id="users" class="users"></div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const usersContainer = document.getElementById("users");
+    const registerForm = document.getElementById("register-form");
+    const loginForm = document.getElementById("login-form");
+    const registerStatus = document.getElementById("register-status");
+    const authStatus = document.getElementById("auth-status");
+    const listStatus = document.getElementById("list-status");
+    const refreshButton = document.getElementById("refresh-btn");
+    const logoutButton = document.getElementById("logout-btn");
+    const tokenBox = document.getElementById("token-box");
+    const tokenKey = "user_management_token";
+
+    function getToken() {
+      return localStorage.getItem(tokenKey) || "";
+    }
+
+    function setToken(token) {
+      if (token) {
+        localStorage.setItem(tokenKey, token);
+      } else {
+        localStorage.removeItem(tokenKey);
+      }
+      tokenBox.textContent = token || "No token yet. Log in to unlock protected routes.";
+    }
+
+    function setStatus(element, message, kind = "") {
+      element.textContent = message;
+      element.className = kind ? `status ${kind}` : "status";
+    }
+
+    async function request(url, options = {}) {
+      const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+      const token = getToken();
+      if (token && !headers.Authorization) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(url, { ...options, headers });
+      const contentType = response.headers.get("content-type") || "";
+      const payload = contentType.includes("application/json")
+        ? await response.json()
+        : await response.text();
+
+      if (!response.ok) {
+        const detail = typeof payload === "object" && payload?.detail ? payload.detail : "Request failed";
+        throw new Error(detail);
+      }
+
+      return payload;
+    }
+
+    function renderUsers(users) {
+      usersContainer.innerHTML = "";
+
+      if (!users.length) {
+        usersContainer.innerHTML = '<div class="empty">No users found. Register one first, then log in.</div>';
+        return;
+      }
+
+      for (const user of users) {
+        const card = document.createElement("article");
+        card.className = "user-card";
+        card.innerHTML = `
+          <div class="user-top">
+            <div>
+              <h3 class="user-title">${user.name}</h3>
+              <p class="user-meta">${user.email}</p>
+            </div>
+            <span class="badge">ID ${user.id}</span>
+          </div>
+          <div class="user-actions">
+            <button class="secondary" type="button">Edit</button>
+            <button class="danger" type="button">Delete</button>
+          </div>
+        `;
+
+        const [editButton, deleteButton] = card.querySelectorAll("button");
+        editButton.addEventListener("click", () => editUser(user));
+        deleteButton.addEventListener("click", () => deleteUser(user.id));
+
+        usersContainer.appendChild(card);
+      }
+    }
+
+    async function loadUsers(message = "") {
+      if (!getToken()) {
+        usersContainer.innerHTML = '<div class="empty">Log in to load protected user data.</div>';
+        setStatus(listStatus, "Login required to load users.");
+        return;
+      }
+
+      try {
+        setStatus(listStatus, message || "Loading users...");
+        const users = await request("/users", { method: "GET" });
+        renderUsers(users);
+        setStatus(listStatus, message ? `${message} Loaded ${users.length} user(s).` : `Loaded ${users.length} user(s).`, "success");
+      } catch (error) {
+        usersContainer.innerHTML = '<div class="empty">Could not load users.</div>';
+        setStatus(listStatus, error.message, "error");
+      }
+    }
+
+    async function registerUser(event) {
+      event.preventDefault();
+      const formData = new FormData(registerForm);
+      const payload = {
+        name: formData.get("name"),
+        email: formData.get("email"),
+        password: formData.get("password"),
+      };
+
+      try {
+        setStatus(registerStatus, "Creating account...");
+        await request("/users", {
+          method: "POST",
+          body: JSON.stringify(payload),
+          headers: { "Content-Type": "application/json" },
+        });
+        registerForm.reset();
+        setStatus(registerStatus, "Account created. You can log in now.", "success");
+      } catch (error) {
+        setStatus(registerStatus, error.message, "error");
+      }
+    }
+
+    async function loginUser(event) {
+      event.preventDefault();
+      const formData = new FormData(loginForm);
+      const payload = {
+        email: formData.get("email"),
+        password: formData.get("password"),
+      };
+
+      try {
+        setStatus(authStatus, "Requesting token...");
+        const data = await request("/auth/login", {
+          method: "POST",
+          body: JSON.stringify(payload),
+          headers: { "Content-Type": "application/json" },
+        });
+        setToken(data.access_token);
+        setStatus(authStatus, "Logged in successfully.", "success");
+        await loadUsers("Authentication successful.");
+      } catch (error) {
+        setStatus(authStatus, error.message, "error");
+      }
+    }
+
+    async function editUser(user) {
+      const nextName = window.prompt("Update name", user.name);
+      if (nextName === null) {
+        return;
+      }
+
+      const nextEmail = window.prompt("Update email", user.email);
+      if (nextEmail === null) {
+        return;
+      }
+
+      const nextPassword = window.prompt("Optional: set a new password (leave blank to keep current)", "");
+      if (nextPassword === null) {
+        return;
+      }
+
+      const payload = { name: nextName, email: nextEmail };
+      if (nextPassword.trim()) {
+        payload.password = nextPassword;
+      }
+
+      try {
+        setStatus(listStatus, `Updating user ${user.id}...`);
+        await request(`/users/${user.id}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        await loadUsers(`User ${user.id} updated.`);
+      } catch (error) {
+        setStatus(listStatus, error.message, "error");
+      }
+    }
+
+    async function deleteUser(userId) {
+      const confirmed = window.confirm(`Delete user ${userId}?`);
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        setStatus(listStatus, `Deleting user ${userId}...`);
+        await request(`/users/${userId}`, { method: "DELETE" });
+        await loadUsers(`User ${userId} deleted.`);
+      } catch (error) {
+        setStatus(listStatus, error.message, "error");
+      }
+    }
+
+    function logoutUser() {
+      setToken("");
+      setStatus(authStatus, "Logged out.");
+      loadUsers();
+    }
+
+    registerForm.addEventListener("submit", registerUser);
+    loginForm.addEventListener("submit", loginUser);
+    refreshButton.addEventListener("click", () => loadUsers("Manual refresh."));
+    logoutButton.addEventListener("click", logoutUser);
+
+    setToken(getToken());
+    loadUsers();
+  </script>
+</body>
+</html>

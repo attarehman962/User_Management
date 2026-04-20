@@ -5,30 +5,36 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fastapi.security import HTTPAuthorizationCredentials
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-MODULE_NAMES = ("database", "models", "schemas", "main")
+MODULE_NAMES = ("database", "auth", "models", "schemas", "main")
 
 
 def load_app(database_url: str):
     os.environ["DATABASE_URL"] = database_url
+    os.environ["JWT_SECRET_KEY"] = "test-secret-key"
+    os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "60"
+
     for module_name in MODULE_NAMES:
         sys.modules.pop(module_name, None)
 
     database = importlib.import_module("database")
+    auth = importlib.import_module("auth")
     schemas = importlib.import_module("schemas")
     main = importlib.import_module("main")
     database.create_db_and_tables()
-    return database, schemas, main
+    return database, auth, schemas, main
 
 
 class UserManagementTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         db_path = Path(self.temp_dir.name) / "test.db"
-        self.database, self.schemas, self.main = load_app(f"sqlite:///{db_path}")
+        self.database, self.auth, self.schemas, self.main = load_app(f"sqlite:///{db_path}")
         self.db = self.database.SessionLocal()
 
     def tearDown(self):
@@ -36,94 +42,183 @@ class UserManagementTests(unittest.TestCase):
         self.database.engine.dispose()
         self.temp_dir.cleanup()
         os.environ.pop("DATABASE_URL", None)
+        os.environ.pop("JWT_SECRET_KEY", None)
+        os.environ.pop("ACCESS_TOKEN_EXPIRE_MINUTES", None)
 
-    def test_create_list_fetch_and_delete_user(self):
-        created_user = self.main.create_user(
-            self.schemas.UserCreate(name=" Alice ", email="alice@example.com"),
+    def create_user(
+        self,
+        name: str = "Alice",
+        email: str = "alice@example.com",
+        password: str = "supersecure",
+    ):
+        return self.main.create_user(
+            self.schemas.UserCreate(name=name, email=email, password=password),
             self.db,
         )
 
-        self.assertEqual(created_user.name, "Alice")
+    def login_user(
+        self,
+        email: str = "alice@example.com",
+        password: str = "supersecure",
+    ):
+        return self.main.login_user(
+            self.schemas.UserLogin(email=email, password=password),
+            self.db,
+        )
+
+    def get_authenticated_user(
+        self,
+        email: str = "alice@example.com",
+        password: str = "supersecure",
+    ):
+        token_response = self.login_user(email=email, password=password)
+        credentials = HTTPAuthorizationCredentials(
+            scheme="Bearer",
+            credentials=token_response.access_token,
+        )
+        current_user = self.main.get_current_user(credentials, self.db)
+        return token_response.access_token, current_user
+
+    def test_dashboard_page_renders(self):
+        response = self.main.dashboard()
+
+        self.assertEqual(response.status_code, 200)
+        body = response.body.decode()
+        self.assertIn("User Dashboard", body)
+        self.assertIn("Get Token", body)
+
+    def test_create_user_hashes_password(self):
+        created_user = self.create_user()
+        stored_user = (
+            self.db.query(self.main.models.User)
+            .filter_by(id=created_user.id)
+            .first()
+        )
+
         self.assertEqual(created_user.email, "alice@example.com")
+        self.assertNotEqual(stored_user.password_hash, "supersecure")
+        self.assertTrue(stored_user.password_hash.startswith("pbkdf2_sha256$"))
+        self.assertTrue(
+            self.auth.verify_password("supersecure", stored_user.password_hash)
+        )
 
-        users = self.main.get_users(self.db)
-        self.assertEqual(len(users), 1)
-        self.assertEqual(users[0].id, created_user.id)
+    def test_login_returns_bearer_token_and_current_user(self):
+        created_user = self.create_user()
 
-        fetched_user = self.main.get_single_user(created_user.id, self.db)
-        self.assertEqual(fetched_user.email, "alice@example.com")
+        token_response = self.login_user()
+        _, current_user = self.get_authenticated_user()
 
-        deleted = self.main.delete_user(created_user.id, self.db)
+        self.assertEqual(token_response.token_type, "bearer")
+        self.assertTrue(token_response.access_token)
+        self.assertEqual(current_user.id, created_user.id)
+        self.assertEqual(current_user.email, created_user.email)
+
+    def test_protected_routes_require_valid_token(self):
+        with self.assertRaises(self.main.HTTPException) as exc:
+            self.main.get_current_user(None, self.db)
+
+        self.assertEqual(exc.exception.status_code, 401)
+        self.assertEqual(exc.exception.detail, "Not authenticated")
+
+        invalid_credentials = HTTPAuthorizationCredentials(
+            scheme="Bearer",
+            credentials="invalid.token.value",
+        )
+        with self.assertRaises(self.main.HTTPException) as invalid_exc:
+            self.main.get_current_user(invalid_credentials, self.db)
+
+        self.assertEqual(invalid_exc.exception.status_code, 401)
+        self.assertEqual(invalid_exc.exception.detail, "Invalid or expired token")
+
+    def test_full_crud_flow_with_authenticated_user(self):
+        alice = self.create_user()
+        bob = self.create_user(name="Bob", email="bob@example.com", password="anotherpass")
+        _, current_user = self.get_authenticated_user()
+
+        users = self.main.get_users(self.db, current_user)
+        self.assertEqual(len(users), 2)
+
+        fetched_user = self.main.get_single_user(bob.id, self.db, current_user)
+        self.assertEqual(fetched_user.name, "Bob")
+
+        updated_user = self.main.update_user(
+            bob.id,
+            self.schemas.UserUpdate(
+                name="Bob Builder",
+                email="builder@example.com",
+                password="newbuilderpass",
+            ),
+            self.db,
+            current_user,
+        )
+        self.assertEqual(updated_user.email, "builder@example.com")
+
+        with self.assertRaises(self.main.HTTPException) as old_login_exc:
+            self.login_user(email="builder@example.com", password="anotherpass")
+
+        self.assertEqual(old_login_exc.exception.status_code, 401)
+
+        refreshed_login = self.login_user(
+            email="builder@example.com",
+            password="newbuilderpass",
+        )
+        self.assertEqual(refreshed_login.token_type, "bearer")
+
+        deleted = self.main.delete_user(bob.id, self.db, current_user)
         self.assertEqual(deleted, {"message": "User successfully deleted"})
-        self.assertEqual(self.main.get_users(self.db), [])
+
+        remaining_users = self.main.get_users(self.db, current_user)
+        self.assertEqual(len(remaining_users), 1)
+        self.assertEqual(remaining_users[0].id, alice.id)
 
     def test_duplicate_email_returns_conflict(self):
-        self.main.create_user(
-            self.schemas.UserCreate(name="Alice", email="alice@example.com"),
-            self.db,
-        )
+        self.create_user()
 
         with self.assertRaises(self.main.HTTPException) as exc:
-            self.main.create_user(
-                self.schemas.UserCreate(name="Alice Again", email="alice@example.com"),
-                self.db,
+            self.create_user(
+                name="Alice Again",
+                email="alice@example.com",
+                password="anotherpass",
             )
 
         self.assertEqual(exc.exception.status_code, 409)
         self.assertEqual(exc.exception.detail, "Email already registered")
 
-    def test_update_user_name_and_email(self):
-        created_user = self.main.create_user(
-            self.schemas.UserCreate(name="Alice", email="alice@example.com"),
-            self.db,
-        )
-
-        updated_user = self.main.update_user(
-            created_user.id,
-            self.schemas.UserUpdate(name="Alice Cooper", email="acooper@example.com"),
-            self.db,
-        )
-
-        self.assertEqual(updated_user.name, "Alice Cooper")
-        self.assertEqual(updated_user.email, "acooper@example.com")
-
     def test_update_user_with_conflicting_email_returns_conflict(self):
-        self.main.create_user(
-            self.schemas.UserCreate(name="Alice", email="alice@example.com"),
-            self.db,
-        )
-        second_user = self.main.create_user(
-            self.schemas.UserCreate(name="Bob", email="bob@example.com"),
-            self.db,
-        )
+        self.create_user()
+        bob = self.create_user(name="Bob", email="bob@example.com", password="anotherpass")
+        _, current_user = self.get_authenticated_user()
 
         with self.assertRaises(self.main.HTTPException) as exc:
             self.main.update_user(
-                second_user.id,
+                bob.id,
                 self.schemas.UserUpdate(email="alice@example.com"),
                 self.db,
+                current_user,
             )
 
         self.assertEqual(exc.exception.status_code, 409)
         self.assertEqual(exc.exception.detail, "Email already registered")
 
-    def test_update_missing_user_returns_not_found(self):
-        with self.assertRaises(self.main.HTTPException) as exc:
+    def test_missing_user_routes_return_not_found(self):
+        self.create_user()
+        _, current_user = self.get_authenticated_user()
+
+        with self.assertRaises(self.main.HTTPException) as get_exc:
+            self.main.get_single_user(999, self.db, current_user)
+        with self.assertRaises(self.main.HTTPException) as update_exc:
             self.main.update_user(
                 999,
                 self.schemas.UserUpdate(name="Ghost User"),
                 self.db,
+                current_user,
             )
+        with self.assertRaises(self.main.HTTPException) as delete_exc:
+            self.main.delete_user(999, self.db, current_user)
 
-        self.assertEqual(exc.exception.status_code, 404)
-        self.assertEqual(exc.exception.detail, "User not found")
-
-    def test_missing_user_returns_not_found(self):
-        with self.assertRaises(self.main.HTTPException) as exc:
-            self.main.get_single_user(999, self.db)
-
-        self.assertEqual(exc.exception.status_code, 404)
-        self.assertEqual(exc.exception.detail, "User not found")
+        self.assertEqual(get_exc.exception.status_code, 404)
+        self.assertEqual(update_exc.exception.status_code, 404)
+        self.assertEqual(delete_exc.exception.status_code, 404)
 
 
 if __name__ == "__main__":
