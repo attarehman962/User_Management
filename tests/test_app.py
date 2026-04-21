@@ -85,7 +85,7 @@ class UserManagementTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.body.decode()
         self.assertIn("User Dashboard", body)
-        self.assertIn("Get Token", body)
+        self.assertTrue('id="root"' in body or "React frontend build not found" in body)
 
     def test_create_user_hashes_password(self):
         created_user = self.create_user()

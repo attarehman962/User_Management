@@ -23,8 +23,9 @@ Open these files side by side with the README and study them in this order:
 3. `schemas.py`
 4. `auth.py`
 5. `main.py`
-6. `frontend/index.html`
-7. `tests/test_app.py`
+6. `frontend/src/App.jsx`
+7. `frontend/src/styles.css`
+8. `tests/test_app.py`
 
 ## Project Files
 
@@ -33,7 +34,10 @@ Open these files side by side with the README and study them in this order:
 - `schemas.py`: validates incoming request data and shapes outgoing responses
 - `auth.py`: hashes passwords and builds/verifies JWT tokens
 - `main.py`: contains registration, login, current-user, and protected CRUD routes
-- `frontend/index.html`: simple browser UI for register, login, and viewing users
+- `frontend/src/App.jsx`: React UI for register, login, current session, and protected CRUD
+- `frontend/src/styles.css`: React frontend styles
+- `frontend/package.json`: React and Vite setup
+- `frontend/vite.config.js`: Vite dev server and API proxy config
 - `tests/test_app.py`: end-to-end tests for auth and CRUD behavior
 - `alembic/`: migration history
 - `.env.example`: sample environment variables
@@ -87,13 +91,33 @@ ACCESS_TOKEN_EXPIRE_MINUTES=60
 
 ## Run The App
 
+Start the FastAPI backend:
+
 ```bash
 ./venv/bin/uvicorn main:app --reload
 ```
 
-Open:
+For React development:
 
-- `http://127.0.0.1:8000/` for the frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open the Vite app at `http://127.0.0.1:5173/`.
+
+For a production-style build that FastAPI can serve at `/`:
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+Then open:
+
+- `http://127.0.0.1:8000/` for the built React frontend
 - `http://127.0.0.1:8000/docs` for FastAPI Swagger docs
 
 ## Authentication Concepts In This Code
@@ -235,7 +259,7 @@ Example update body:
 
 ## Frontend
 
-The frontend at `/` lets you:
+The React frontend lets you:
 
 - create an account
 - log in and store the token in the browser
@@ -258,4 +282,4 @@ That fixes the schema mismatch bug for older local databases.
 
 ## Important Learning Note
 
-The hashing and JWT code in `auth.py` is written to be readable so you can learn from it. In larger production systems, teams usually use dedicated auth libraries instead of maintaining token logic by hand.
+The hashing and JWT code in `auth.py` is written to be readable so you can learn from it. The frontend is now written in React so you can also practice explaining component state, controlled forms, localStorage token handling, and API calls in interviews. In larger production systems, teams usually use dedicated auth libraries instead of maintaining token logic by hand.

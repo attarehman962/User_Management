@@ -5,6 +5,7 @@ from typing import Generator
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -14,7 +15,10 @@ from auth import AuthError, create_access_token, decode_access_token, hash_passw
 from database import SessionLocal, create_db_and_tables
 
 BASE_DIR = Path(__file__).resolve().parent
-FRONTEND_FILE = BASE_DIR / "frontend" / "index.html"
+FRONTEND_DIR = BASE_DIR / "frontend"
+FRONTEND_DIST_DIR = FRONTEND_DIR / "dist"
+FRONTEND_DIST_FILE = FRONTEND_DIST_DIR / "index.html"
+FRONTEND_DIST_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -25,6 +29,8 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+if FRONTEND_DIST_ASSETS_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST_ASSETS_DIR), name="frontend-assets")
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -72,7 +78,26 @@ def get_current_user(
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
-    return HTMLResponse(FRONTEND_FILE.read_text(encoding="utf-8"))
+    if FRONTEND_DIST_FILE.exists():
+        return HTMLResponse(FRONTEND_DIST_FILE.read_text(encoding="utf-8"))
+
+    return HTMLResponse(
+        """
+        <!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>React Frontend Not Built</title>
+          </head>
+          <body style="font-family: sans-serif; padding: 2rem; line-height: 1.6;">
+            <h1>React frontend build not found</h1>
+            <p>Run <code>cd frontend</code>, <code>npm install</code>, and <code>npm run build</code>.</p>
+            <p>For development, you can also run <code>npm run dev</code> and open the Vite URL.</p>
+          </body>
+        </html>
+        """
+    )
 
 
 @app.post(
