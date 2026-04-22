@@ -1,6 +1,6 @@
-# User Management API
+# User Management
 
-A small FastAPI project for learning CRUD, PostgreSQL, password hashing, and JWT authentication together.
+A full-stack project for learning CRUD, PostgreSQL, password hashing, and JWT authentication — with a React frontend that exercises the same API.
 
 ## What This Project Teaches
 
@@ -29,26 +29,25 @@ Open these files side by side with the README and study them in this order:
 
 ## Project Files
 
-- `database.py`: loads `DATABASE_URL` from `.env`, creates the SQLAlchemy engine and session, and auto-adds `password_hash` for older databases
-- `models.py`: defines the `users` table
-- `schemas.py`: validates incoming request data and shapes outgoing responses
-- `auth.py`: hashes passwords and builds/verifies JWT tokens
-- `main.py`: contains registration, login, current-user, and protected CRUD routes
-- `frontend/src/App.jsx`: React UI for register, login, current session, and protected CRUD
-- `frontend/src/styles.css`: React frontend styles
-- `frontend/package.json`: React and Vite setup
-- `frontend/vite.config.js`: Vite dev server and API proxy config
-- `tests/test_app.py`: end-to-end tests for auth and CRUD behavior
-- `alembic/`: migration history
-- `.env.example`: sample environment variables
-- `requirements.txt`: project dependencies
+- `database.py` — loads `DATABASE_URL` from `.env`, creates the SQLAlchemy engine and session
+- `models.py` — defines the `users` table
+- `schemas.py` — validates incoming request data and shapes outgoing responses
+- `auth.py` — hashes passwords and builds/verifies JWT tokens using Python stdlib only
+- `main.py` — registration, login, current-user, and protected CRUD routes
+- `frontend/src/App.jsx` — React UI for register, login, current session, and protected CRUD
+- `frontend/src/styles.css` — frontend styles
+- `frontend/package.json` — React 18 and Vite 5
+- `frontend/vite.config.js` — Vite dev server and API proxy config
+- `tests/test_app.py` — unit tests for auth and CRUD (run against SQLite)
+- `alembic/` — migration history
+- `.env.example` — sample environment variables
 
 ## Environment Setup
 
-Install dependencies:
+Install Python dependencies:
 
 ```bash
-pip install -r requirements.txt
+pip install fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary "pydantic[email]" python-dotenv alembic
 ```
 
 Make sure PostgreSQL is running:
@@ -89,12 +88,18 @@ JWT_SECRET_KEY=replace-this-with-a-long-random-secret
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 ```
 
+Run database migrations:
+
+```bash
+alembic upgrade head
+```
+
 ## Run The App
 
 Start the FastAPI backend:
 
 ```bash
-./venv/bin/uvicorn main:app --reload
+uvicorn main:app --reload
 ```
 
 For React development:
@@ -276,10 +281,22 @@ That fixes the schema mismatch bug for older local databases.
 
 ## Run Tests
 
+Tests use SQLite so no PostgreSQL setup is needed:
+
 ```bash
-./venv/bin/python -m unittest discover -s tests -v
+python -m unittest discover -s tests -v
 ```
 
-## Important Learning Note
+## Stack Details
 
-The hashing and JWT code in `auth.py` is written to be readable so you can learn from it. The frontend is now written in React so you can also practice explaining component state, controlled forms, localStorage token handling, and API calls in interviews. In larger production systems, teams usually use dedicated auth libraries instead of maintaining token logic by hand.
+| Layer | Technology |
+|---|---|
+| Backend | Python 3.11+, FastAPI, SQLAlchemy |
+| Database | PostgreSQL (Alembic migrations) |
+| Auth | Custom HS256 JWT + PBKDF2-SHA256 (Python stdlib, no third-party auth lib) |
+| Frontend | React 18, Vite 5 |
+| Tests | Python `unittest` with SQLite |
+
+## Learning Note
+
+The hashing and JWT code in `auth.py` uses only Python's standard library (`hashlib`, `hmac`, `secrets`) so you can see exactly what happens at each step. The frontend demonstrates controlled React forms, `localStorage` token storage, and `fetch`-based API calls. In production systems teams typically use dedicated auth libraries rather than maintaining this logic by hand.
