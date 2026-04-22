@@ -10,8 +10,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET_KEY:
@@ -20,9 +19,9 @@ if not JWT_SECRET_KEY:
     )
 
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
-HASH_NAME = "sha256"
-PBKDF2_ITERATIONS = 390000
-SALT_BYTES = 16
+_HASH_NAME = "sha256"
+_PBKDF2_ITERATIONS = 390_000
+_SALT_BYTES = 16
 
 
 class AuthError(ValueError):
@@ -39,15 +38,15 @@ def _b64url_decode(data: str) -> bytes:
 
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_bytes(SALT_BYTES)
+    salt = secrets.token_bytes(_SALT_BYTES)
     derived_key = hashlib.pbkdf2_hmac(
-        HASH_NAME,
+        _HASH_NAME,
         password.encode("utf-8"),
         salt,
-        PBKDF2_ITERATIONS,
+        _PBKDF2_ITERATIONS,
     )
     return (
-        f"pbkdf2_{HASH_NAME}${PBKDF2_ITERATIONS}$"
+        f"pbkdf2_{_HASH_NAME}${_PBKDF2_ITERATIONS}$"
         f"{_b64url_encode(salt)}${_b64url_encode(derived_key)}"
     )
 
@@ -58,10 +57,10 @@ def verify_password(password: str, stored_hash: str | None) -> bool:
 
     try:
         algorithm, iterations, salt, stored_key = stored_hash.split("$", maxsplit=3)
-        if algorithm != f"pbkdf2_{HASH_NAME}":
+        if algorithm != f"pbkdf2_{_HASH_NAME}":
             return False
         derived_key = hashlib.pbkdf2_hmac(
-            HASH_NAME,
+            _HASH_NAME,
             password.encode("utf-8"),
             _b64url_decode(salt),
             int(iterations),

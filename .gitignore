@@ -1,7 +1,49 @@
+# Python
 __pycache__/
-*.db
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
 venv/
-.codex/
+env/
+ENV/
+
+# Environment variables — never commit secrets
 .env
+.env.local
+.env.*.local
+
+# Database files
+*.db
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Frontend
 frontend/node_modules/
 frontend/dist/
+
+# Alembic
+# (keep versions/ committed; ignore only local artefacts)
+
+# Misc
+.codex/
+*.log

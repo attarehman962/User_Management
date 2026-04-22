@@ -1,4 +1,3 @@
-# schemas.py
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -9,12 +8,11 @@ from pydantic import (
 )
 
 
-
-def clean_name(value: str) -> str:
-    cleaned_value = value.strip()
-    if not cleaned_value:
+def _clean_name(value: str) -> str:
+    cleaned = value.strip()
+    if not cleaned:
         raise ValueError("Name cannot be blank")
-    return cleaned_value
+    return cleaned
 
 
 class UserBase(BaseModel):
@@ -24,7 +22,7 @@ class UserBase(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, value: str) -> str:
-        return clean_name(value)
+        return _clean_name(value)
 
 
 class UserCreate(UserBase):
@@ -46,7 +44,7 @@ class UserUpdate(BaseModel):
     def validate_name(cls, value: str | None) -> str | None:
         if value is None:
             return value
-        return clean_name(value)
+        return _clean_name(value)
 
     @model_validator(mode="after")
     def validate_has_data(self):

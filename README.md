@@ -1,118 +1,127 @@
 # User Management
 
-A full-stack project for learning CRUD, PostgreSQL, password hashing, and JWT authentication — with a React frontend that exercises the same API.
+A full-stack user management application with a **FastAPI** backend and **React + Vite** frontend. Covers registration, JWT authentication, and protected CRUD operations on users.
 
-## What This Project Teaches
+## Tech Stack
 
-This app now shows the full flow from registration to login to protected CRUD.
+| Layer | Technology |
+|---|---|
+| Backend | Python 3.11+, FastAPI, SQLAlchemy |
+| Database | PostgreSQL (Alembic migrations) |
+| Auth | Custom HS256 JWT + PBKDF2-SHA256 (Python stdlib only) |
+| Frontend | React 18, Vite 5 |
+| Tests | Python `unittest` with SQLite |
 
-- how FastAPI routes work
-- how request validation works with Pydantic
-- how SQLAlchemy models map to database tables
-- how passwords are hashed before saving
-- how JWT tokens are created and checked
-- how protected routes use `Authorization: Bearer <token>`
-- how a small frontend can call the same backend API
+## Project Structure
 
-## Best Reading Order
-
-Open these files side by side with the README and study them in this order:
-
-1. `database.py`
-2. `models.py`
-3. `schemas.py`
-4. `auth.py`
-5. `main.py`
-6. `frontend/src/App.jsx`
-7. `frontend/src/styles.css`
-8. `tests/test_app.py`
-
-## Project Files
-
-- `database.py` — loads `DATABASE_URL` from `.env`, creates the SQLAlchemy engine and session
-- `models.py` — defines the `users` table
-- `schemas.py` — validates incoming request data and shapes outgoing responses
-- `auth.py` — hashes passwords and builds/verifies JWT tokens using Python stdlib only
-- `main.py` — registration, login, current-user, and protected CRUD routes
-- `frontend/src/App.jsx` — React UI for register, login, current session, and protected CRUD
-- `frontend/src/styles.css` — frontend styles
-- `frontend/package.json` — React 18 and Vite 5
-- `frontend/vite.config.js` — Vite dev server and API proxy config
-- `tests/test_app.py` — unit tests for auth and CRUD (run against SQLite)
-- `alembic/` — migration history
-- `.env.example` — sample environment variables
-
-## Environment Setup
-
-Install Python dependencies:
-
-```bash
-pip install fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary "pydantic[email]" python-dotenv alembic
+```
+User_Management/
+├── app/
+│   ├── __init__.py
+│   ├── main.py            # FastAPI app factory, lifespan, root route
+│   ├── database.py        # SQLAlchemy engine, session, Base
+│   ├── models.py          # User ORM model
+│   ├── schemas.py         # Pydantic request/response schemas
+│   ├── auth.py            # Password hashing + JWT (stdlib only)
+│   ├── dependencies.py    # Shared FastAPI deps: get_db, get_current_user
+│   └── routers/
+│       ├── auth.py        # POST /auth/login  GET /auth/me
+│       └── users.py       # CRUD /users
+├── alembic/
+│   ├── env.py
+│   └── versions/
+├── tests/
+│   ├── __init__.py
+│   └── test_app.py        # unittest suite (runs against SQLite)
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx        # React SPA
+│   │   ├── main.jsx
+│   │   └── styles.css
+│   ├── index.html
+│   ├── vite.config.js
+│   └── package.json
+├── .env                   # secrets (git-ignored)
+├── .env.example           # template to copy from
+├── alembic.ini
+└── pyproject.toml         # dependencies + ruff/pytest config
 ```
 
-Make sure PostgreSQL is running:
+## API Endpoints
 
-```bash
-sudo systemctl start postgresql
-```
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/` | No | Serves the React frontend |
+| `POST` | `/users` | No | Register a new user |
+| `POST` | `/auth/login` | No | Login — returns a JWT bearer token |
+| `GET` | `/auth/me` | Yes | Get the currently authenticated user |
+| `GET` | `/users` | Yes | List all users |
+| `GET` | `/users/{id}` | Yes | Get a single user by ID |
+| `PUT` | `/users/{id}` | Yes | Update name, email, or password |
+| `DELETE` | `/users/{id}` | Yes | Delete a user |
 
-Create a PostgreSQL user:
+Protected endpoints require `Authorization: Bearer <token>`.
 
-```bash
-sudo -u postgres psql -c "CREATE USER fastapi_user WITH PASSWORD 'strongpass';"
-```
+## Setup
 
-If the user already exists, reset the password:
-
-```bash
-sudo -u postgres psql -c "ALTER USER fastapi_user WITH PASSWORD 'strongpass';"
-```
-
-Create the database:
-
-```bash
-sudo -u postgres psql -c "CREATE DATABASE fastapi_db OWNER fastapi_user;"
-```
-
-Create your local env file:
+### 1. Copy and fill the environment file
 
 ```bash
 cp .env.example .env
 ```
 
-Put values like these in `.env`:
+Edit `.env`:
 
 ```env
-DATABASE_URL=postgresql://fastapi_user:strongpass@localhost/fastapi_db
-JWT_SECRET_KEY=replace-this-with-a-long-random-secret
+DATABASE_URL=postgresql://user:password@localhost/user_management
+JWT_SECRET_KEY=replace-with-a-long-random-secret
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 ```
 
-Run database migrations:
+Generate a secure secret:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+### 2. Install Python dependencies
+
+```bash
+pip install -e ".[dev]"
+```
+
+Or without dev tools:
+
+```bash
+pip install -e .
+```
+
+### 3. Set up PostgreSQL
+
+```bash
+sudo systemctl start postgresql
+sudo -u postgres psql -c "CREATE USER your_user WITH PASSWORD 'your_password';"
+sudo -u postgres psql -c "CREATE DATABASE user_management OWNER your_user;"
+```
+
+### 4. Run database migrations
 
 ```bash
 alembic upgrade head
 ```
 
-## Run The App
-
-Start the FastAPI backend:
+### 5. Start the backend
 
 ```bash
-uvicorn main:app --reload
+uvicorn app.main:app --reload
 ```
 
-For React development:
+- API: `http://localhost:8000`
+- Swagger docs: `http://localhost:8000/docs`
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+### 6. Build or run the frontend
 
-Open the Vite app at `http://127.0.0.1:5173/`.
-
-For a production-style build that FastAPI can serve at `/`:
+**Production build** (served by FastAPI at `/`):
 
 ```bash
 cd frontend
@@ -120,183 +129,55 @@ npm install
 npm run build
 ```
 
-Then open:
-
-- `http://127.0.0.1:8000/` for the built React frontend
-- `http://127.0.0.1:8000/docs` for FastAPI Swagger docs
-
-## Authentication Concepts In This Code
-
-### 1. Password hashing
-
-When a user registers, the password is never stored directly.
-
-`auth.py` uses `hashlib.pbkdf2_hmac` to turn the password into a derived hash plus salt. The database stores only `password_hash`.
-
-So instead of this unsafe idea:
-
-```text
-password = supersecure
-```
-
-The database stores something like this:
-
-```text
-pbkdf2_sha256$390000$<salt>$<derived_key>
-```
-
-### 2. JWT tokens
-
-After login, `main.py` calls `create_access_token()` from `auth.py`.
-
-That token contains claims such as:
-
-- `sub`: the user ID
-- `email`: the user email
-- `exp`: expiration time
-
-The browser or API client sends the token back using:
-
-```http
-Authorization: Bearer <token>
-```
-
-### 3. Protected routes
-
-`get_current_user()` in `main.py` is the key auth dependency.
-
-It:
-
-1. reads the bearer token
-2. decodes and verifies the JWT
-3. gets the `sub` user ID from the token
-4. loads that user from the database
-5. returns the authenticated user to the route
-
-That dependency is added to routes like:
-
-- `GET /auth/me`
-- `GET /users`
-- `GET /users/{user_id}`
-- `PUT /users/{user_id}`
-- `DELETE /users/{user_id}`
-
-## Request Flow To Understand
-
-### Register flow
-
-1. frontend or `/docs` sends `name`, `email`, and `password`
-2. `schemas.UserCreate` validates the data
-3. `main.py` hashes the password
-4. `models.User` stores `name`, `email`, and `password_hash`
-5. response returns safe user data without the password
-
-### Login flow
-
-1. client sends `email` and `password`
-2. `main.py` finds the user by email
-3. `auth.verify_password()` compares the raw password with the stored hash
-4. if valid, `auth.create_access_token()` returns a JWT
-5. the client saves and uses that JWT for protected routes
-
-### Protected CRUD flow
-
-1. client sends bearer token in the header
-2. `get_current_user()` verifies the token
-3. route runs only if the token is valid
-4. database query returns protected data
-
-## API Endpoints
-
-Public routes:
-
-- `GET /`
-- `POST /users`
-- `POST /auth/login`
-
-Protected routes:
-
-- `GET /auth/me`
-- `GET /users`
-- `GET /users/{user_id}`
-- `PUT /users/{user_id}`
-- `DELETE /users/{user_id}`
-
-## How To Test In `/docs`
-
-1. Open `http://127.0.0.1:8000/docs`
-2. Use `POST /users` to create a user
-3. Use `POST /auth/login` with the same email and password
-4. Copy the `access_token`
-5. Click `Authorize` in Swagger
-6. Paste the token value into the bearer auth box
-7. Call `GET /auth/me` or `GET /users`
-8. Try `PUT /users/{user_id}` to change name, email, or password
-
-Example register body:
-
-```json
-{
-  "name": "Alice",
-  "email": "alice@example.com",
-  "password": "supersecure"
-}
-```
-
-Example login body:
-
-```json
-{
-  "email": "alice@example.com",
-  "password": "supersecure"
-}
-```
-
-Example update body:
-
-```json
-{
-  "name": "Alice Cooper",
-  "email": "acooper@example.com",
-  "password": "newsecurepass"
-}
-```
-
-## Frontend
-
-The React frontend lets you:
-
-- create an account
-- log in and store the token in the browser
-- verify the session with the backend
-- load protected user data
-- update user name, email, and password
-- delete users
-
-## Notes About Existing Databases
-
-If you already had a `users` table before adding auth, `database.py` now checks whether the `password_hash` column exists and adds it automatically on startup.
-
-That fixes the schema mismatch bug for older local databases.
-
-## Run Tests
-
-Tests use SQLite so no PostgreSQL setup is needed:
+**Development** (hot reload via Vite, API proxied to FastAPI):
 
 ```bash
+cd frontend
+npm run dev
+# Open http://localhost:5173
+```
+
+## Running Tests
+
+Tests use SQLite — no PostgreSQL setup needed:
+
+```bash
+python -m pytest tests/ -v
+# or
 python -m unittest discover -s tests -v
 ```
 
-## Stack Details
+## Authentication Flow
 
-| Layer | Technology |
-|---|---|
-| Backend | Python 3.11+, FastAPI, SQLAlchemy |
-| Database | PostgreSQL (Alembic migrations) |
-| Auth | Custom HS256 JWT + PBKDF2-SHA256 (Python stdlib, no third-party auth lib) |
-| Frontend | React 18, Vite 5 |
-| Tests | Python `unittest` with SQLite |
+1. **Register** — `POST /users` with `name`, `email`, `password`. Password is hashed with PBKDF2-SHA256 (390,000 iterations) before storage.
+2. **Login** — `POST /auth/login` returns a signed HS256 JWT with `sub` (user ID), `email`, and `exp` claims.
+3. **Authorize** — Send `Authorization: Bearer <token>` on protected requests.
+4. **Verify** — `get_current_user` in `app/dependencies.py` decodes the token, validates the signature, checks expiry, and loads the user from the database.
+
+## How to Test in `/docs`
+
+1. Open `http://localhost:8000/docs`
+2. `POST /users` to create an account
+3. `POST /auth/login` with the same credentials
+4. Copy the `access_token` from the response
+5. Click **Authorize** → paste the token
+6. Call any protected endpoint
+
+## Best Reading Order
+
+If you are studying the code:
+
+1. `app/database.py` — engine and session setup
+2. `app/models.py` — the `users` table
+3. `app/schemas.py` — validation and response shapes
+4. `app/auth.py` — PBKDF2 hashing and HS256 JWT
+5. `app/dependencies.py` — shared FastAPI deps
+6. `app/routers/users.py` — CRUD routes
+7. `app/routers/auth.py` — login and current-user routes
+8. `app/main.py` — app factory, router wiring
+9. `frontend/src/App.jsx` — React UI
+10. `tests/test_app.py` — test suite
 
 ## Learning Note
 
-The hashing and JWT code in `auth.py` uses only Python's standard library (`hashlib`, `hmac`, `secrets`) so you can see exactly what happens at each step. The frontend demonstrates controlled React forms, `localStorage` token storage, and `fetch`-based API calls. In production systems teams typically use dedicated auth libraries rather than maintaining this logic by hand.
+`app/auth.py` uses only Python's standard library (`hashlib`, `hmac`, `secrets`) so every step of hashing and token signing is visible. The frontend shows controlled React forms, `localStorage` token storage, and `fetch`-based API calls. In production, teams typically use dedicated auth libraries rather than maintaining this logic by hand.
