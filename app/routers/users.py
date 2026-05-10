@@ -9,6 +9,25 @@ from app.dependencies import get_current_user, get_db
 router = APIRouter(prefix="/users", tags=["users"])
 
 
+def _is_admin(user: models.User) -> bool:
+    return getattr(user, "role", "user") == "admin"
+
+
+def _require_admin_or_self(current_user: models.User, user_id: int) -> None:
+    if _is_admin(current_user) or current_user.id == user_id:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="You do not have permission to access this user",
+    )
+
+
+def _determine_role(db: Session) -> str:
+    user_count = db.query(models.User).count()
+    return "admin" if user_count == 0 else "user"
+
+
 @router.post("", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     try:
@@ -22,6 +41,7 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
             name=user.name,
             email=user.email,
             password_hash=hash_password(user.password),
+            role=_determine_role(db),
         )
         db.add(db_user)
         db.commit()
@@ -59,8 +79,10 @@ def get_users(
 def get_single_user(
     user_id: int,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(get_current_user),
 ):
+    _require_admin_or_self(current_user, user_id)
+
     try:
         user = db.query(models.User).filter(models.User.id == user_id).first()
     except SQLAlchemyError as exc:
@@ -79,8 +101,10 @@ def update_user(
     user_id: int,
     user_update: schemas.UserUpdate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(get_current_user),
 ):
+    _require_admin_or_self(current_user, user_id)
+
     try:
         user = db.query(models.User).filter(models.User.id == user_id).first()
         if not user:
@@ -133,8 +157,10 @@ def update_user(
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(get_current_user),
 ):
+    _require_admin_or_self(current_user, user_id)
+
     try:
         user = db.query(models.User).filter(models.User.id == user_id).first()
     except SQLAlchemyError as exc:

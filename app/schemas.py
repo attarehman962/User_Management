@@ -7,11 +7,20 @@ from pydantic import (
     model_validator,
 )
 
+VALID_ROLES = ("admin", "user")
+
 
 def _clean_name(value: str) -> str:
     cleaned = value.strip()
     if not cleaned:
         raise ValueError("Name cannot be blank")
+    return cleaned
+
+
+def _clean_role(value: str) -> str:
+    cleaned = value.strip().lower()
+    if cleaned not in VALID_ROLES:
+        raise ValueError("Role must be either 'admin' or 'user'")
     return cleaned
 
 
@@ -55,6 +64,12 @@ class UserUpdate(BaseModel):
 
 class UserResponse(UserBase):
     id: int
+    role: str
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: str) -> str:
+        return _clean_role(value)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -66,12 +81,3 @@ class TokenResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
-
-
-
-class SummaryRequest(BaseModel):
-    text: str = Field(min_length=20, max_length=10000)
-
-
-class SummaryResponse(BaseModel):
-    summary: str

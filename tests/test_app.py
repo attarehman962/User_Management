@@ -20,8 +20,6 @@ _APP_MODULES = (
     "app.dependencies",
     "app.routers.users",
     "app.routers.auth",
-    "app.routers.ai",
-    "app.ai_summary",
     "app.main",
 )
 
@@ -30,6 +28,9 @@ def load_app(database_url: str):
     os.environ["DATABASE_URL"] = database_url
     os.environ["JWT_SECRET_KEY"] = "test-secret-key"
     os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "60"
+    os.environ["DEFAULT_ADMIN_NAME"] = "System Admin"
+    os.environ["DEFAULT_ADMIN_EMAIL"] = "admin@gmail.com"
+    os.environ["DEFAULT_ADMIN_PASSWORD"] = "Admin1234"
 
     for name in _APP_MODULES:
         sys.modules.pop(name, None)
@@ -41,11 +42,10 @@ def load_app(database_url: str):
     deps = importlib.import_module("app.dependencies")
     users_router = importlib.import_module("app.routers.users")
     auth_router = importlib.import_module("app.routers.auth")
-    ai_router = importlib.import_module("app.routers.ai")
     main = importlib.import_module("app.main")
 
     database.create_db_and_tables()
-    return database, auth, schemas, models, deps, users_router, auth_router, ai_router, main
+    return database, auth, schemas, models, deps, users_router, auth_router, main
 
 
 class UserManagementTests(unittest.TestCase):
@@ -60,7 +60,6 @@ class UserManagementTests(unittest.TestCase):
             self.deps,
             self.users,
             self.auth_router,
-            self.ai_router,
             self.main,
         ) = load_app(f"sqlite:///{db_path}")
         self.db = self.database.SessionLocal()
@@ -72,7 +71,9 @@ class UserManagementTests(unittest.TestCase):
         os.environ.pop("DATABASE_URL", None)
         os.environ.pop("JWT_SECRET_KEY", None)
         os.environ.pop("ACCESS_TOKEN_EXPIRE_MINUTES", None)
-        os.environ.pop("HF_TOKEN", None)
+        os.environ.pop("DEFAULT_ADMIN_NAME", None)
+        os.environ.pop("DEFAULT_ADMIN_EMAIL", None)
+        os.environ.pop("DEFAULT_ADMIN_PASSWORD", None)
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -117,7 +118,11 @@ class UserManagementTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         body = response.body.decode()
-        self.assertTrue("User Dashboard" in body or "React frontend build not found" in body)
+        self.assertTrue(
+            "User Management Control Center" in body
+            or '<div id="root"></div>' in body
+            or "React frontend build not found" in body
+        )
 
     def test_create_user_hashes_password(self):
         created_user = self.create_user()
@@ -128,6 +133,7 @@ class UserManagementTests(unittest.TestCase):
         )
 
         self.assertEqual(created_user.email, "alice@example.com")
+        self.assertEqual(created_user.role, "admin")
         self.assertNotEqual(stored_user.password_hash, "supersecure")
         self.assertTrue(stored_user.password_hash.startswith("pbkdf2_sha256$"))
         self.assertTrue(
@@ -144,6 +150,20 @@ class UserManagementTests(unittest.TestCase):
         self.assertTrue(token_response.access_token)
         self.assertEqual(current_user.id, created_user.id)
         self.assertEqual(current_user.email, created_user.email)
+        self.assertEqual(current_user.role, "admin")
+
+    def test_default_admin_seed_creates_single_admin_for_empty_database(self):
+        self.main.ensure_default_admin()
+        self.main.ensure_default_admin()
+
+        users = self.db.query(self.models.User).order_by(self.models.User.id.asc()).all()
+
+        self.assertEqual(len(users), 1)
+        self.assertEqual(users[0].role, "admin")
+        self.assertEqual(users[0].email, "admin@gmail.com")
+        self.assertTrue(
+            self.auth.verify_password("Admin1234", users[0].password_hash)
+        )
 
     def test_protected_routes_require_valid_token(self):
         with self.assertRaises(HTTPException) as exc:
@@ -166,6 +186,9 @@ class UserManagementTests(unittest.TestCase):
         alice = self.create_user()
         bob = self.create_user(name="Bob", email="bob@example.com", password="anotherpass")
         _, current_user = self.get_authenticated_user()
+
+        self.assertEqual(current_user.role, "admin")
+        self.assertEqual(bob.role, "user")
 
         users = self.users.get_users(self.db, current_user)
         self.assertEqual(len(users), 2)
@@ -202,6 +225,36 @@ class UserManagementTests(unittest.TestCase):
         self.assertEqual(len(remaining), 1)
         self.assertEqual(remaining[0].id, alice.id)
 
+    def test_standard_user_can_view_directory_but_only_manage_self(self):
+        self.create_user()
+        bob = self.create_user(name="Bob", email="bob@example.com", password="anotherpass")
+        _, bob_user = self.get_authenticated_user(
+            email="bob@example.com",
+            password="anotherpass",
+        )
+
+        visible_users = self.users.get_users(self.db, bob_user)
+        self.assertEqual(len(visible_users), 2)
+        self.assertEqual(visible_users[0].email, "alice@example.com")
+        self.assertEqual(visible_users[1].id, bob.id)
+        self.assertEqual(bob_user.role, "user")
+
+        with self.assertRaises(HTTPException) as get_exc:
+            self.users.get_single_user(1, self.db, bob_user)
+        with self.assertRaises(HTTPException) as update_exc:
+            self.users.update_user(
+                1,
+                self.schemas.UserUpdate(name="Admin Override"),
+                self.db,
+                bob_user,
+            )
+        with self.assertRaises(HTTPException) as delete_exc:
+            self.users.delete_user(1, self.db, bob_user)
+
+        self.assertEqual(get_exc.exception.status_code, 403)
+        self.assertEqual(update_exc.exception.status_code, 403)
+        self.assertEqual(delete_exc.exception.status_code, 403)
+
     def test_duplicate_email_returns_conflict(self):
         self.create_user()
 
@@ -226,21 +279,6 @@ class UserManagementTests(unittest.TestCase):
 
         self.assertEqual(exc.exception.status_code, 409)
         self.assertEqual(exc.exception.detail, "Email already registered")
-
-    def test_ai_summary_requires_hf_token(self):
-        self.create_user()
-        _, current_user = self.get_authenticated_user()
-
-        with self.assertRaises(HTTPException) as exc:
-            self.ai_router.summarize_text(
-                self.schemas.SummaryRequest(
-                    text="This is a long enough paragraph to trigger the summarization validation and test the missing token case."
-                ),
-                current_user,
-            )
-
-        self.assertEqual(exc.exception.status_code, 503)
-        self.assertIn("HF_TOKEN is not set", exc.exception.detail)
 
     def test_missing_user_routes_return_not_found(self):
         self.create_user()

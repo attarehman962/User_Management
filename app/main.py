@@ -1,19 +1,55 @@
 from contextlib import asynccontextmanager
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.database import create_db_and_tables
-from app.routers import ai, auth, users
+from app import models
+from app.auth import hash_password
+from app.database import SessionLocal, create_db_and_tables
+from app.routers import auth, users
 
 _FRONTEND_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
+
+
+def _required_env(name: str) -> str:
+    value = os.getenv(name)
+    if not value:
+        raise RuntimeError(f"{name} is not set. Add it to .env before starting the app.")
+    return value
+
+
+DEFAULT_ADMIN_NAME = _required_env("DEFAULT_ADMIN_NAME")
+DEFAULT_ADMIN_EMAIL = _required_env("DEFAULT_ADMIN_EMAIL")
+DEFAULT_ADMIN_PASSWORD = _required_env("DEFAULT_ADMIN_PASSWORD")
+
+
+def ensure_default_admin() -> None:
+    db = SessionLocal()
+    try:
+        has_users = db.query(models.User.id).first() is not None
+        if has_users:
+            return
+
+        db.add(
+            models.User(
+                name=DEFAULT_ADMIN_NAME,
+                email=DEFAULT_ADMIN_EMAIL,
+                password_hash=hash_password(DEFAULT_ADMIN_PASSWORD),
+                role="admin",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     create_db_and_tables()
+    ensure_default_admin()
     yield
 
 
@@ -33,7 +69,6 @@ if (_FRONTEND_DIST / "assets").exists():
 
 app.include_router(auth.router)
 app.include_router(users.router)
-app.include_router(ai.router)
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)

@@ -1,6 +1,6 @@
 # User Management
 
-A full-stack user management application with a **FastAPI** backend and **React + Vite** frontend. Covers registration, JWT authentication, and protected CRUD operations on users.
+A full-stack user management application with a **FastAPI** backend and **React + Vite** frontend. It now presents the system as a professional dashboard with JWT authentication, protected CRUD operations, and backend-enforced role-based visibility.
 
 ## Tech Stack
 
@@ -9,6 +9,7 @@ A full-stack user management application with a **FastAPI** backend and **React 
 | Backend | Python 3.11+, FastAPI, SQLAlchemy |
 | Database | PostgreSQL (Alembic migrations) |
 | Auth | Custom HS256 JWT + PBKDF2-SHA256 (Python stdlib only) |
+| Authorization | Backend-enforced `admin` and `user` roles |
 | Frontend | React 18, Vite 5 |
 | Tests | Python `unittest` with SQLite |
 
@@ -24,10 +25,8 @@ User_Management/
 │   ├── schemas.py         # Pydantic request/response schemas
 │   ├── auth.py            # Password hashing + JWT (stdlib only)
 │   ├── dependencies.py    # Shared FastAPI deps: get_db, get_current_user
-│   ├── ai_summary.py      # Hugging Face router summarization helper
 │   └── routers/
 │       ├── auth.py        # POST /auth/login  GET /auth/me
-│       ├── ai.py          # POST /ai/summarize
 │       └── users.py       # CRUD /users
 ├── alembic/
 │   ├── env.py
@@ -57,11 +56,10 @@ User_Management/
 | `POST` | `/users` | No | Register a new user |
 | `POST` | `/auth/login` | No | Login — returns a JWT bearer token |
 | `GET` | `/auth/me` | Yes | Get the currently authenticated user |
-| `GET` | `/users` | Yes | List all users |
-| `GET` | `/users/{id}` | Yes | Get a single user by ID |
-| `PUT` | `/users/{id}` | Yes | Update name, email, or password |
-| `DELETE` | `/users/{id}` | Yes | Delete a user |
-| `POST` | `/ai/summarize` | Yes | Summarize text with the Hugging Face router |
+| `GET` | `/users` | Yes | List all users for any authenticated user |
+| `GET` | `/users/{id}` | Yes | Get a single user by ID if you are an admin or the account owner |
+| `PUT` | `/users/{id}` | Yes | Update a user if you are an admin or the account owner |
+| `DELETE` | `/users/{id}` | Yes | Delete a user if you are an admin or the account owner |
 
 Protected endpoints require `Authorization: Bearer <token>`.
 
@@ -79,7 +77,9 @@ Edit `.env`:
 DATABASE_URL=postgresql://user:password@localhost/user_management
 JWT_SECRET_KEY=replace-with-a-long-random-secret
 ACCESS_TOKEN_EXPIRE_MINUTES=60
-HF_TOKEN=your_huggingface_token
+DEFAULT_ADMIN_NAME=System Admin
+DEFAULT_ADMIN_EMAIL=admin@user-management.local
+DEFAULT_ADMIN_PASSWORD=Admin@12345
 ```
 
 Generate a secure secret:
@@ -154,9 +154,24 @@ python -m unittest discover -s tests -v
 ## Authentication Flow
 
 1. **Register** — `POST /users` with `name`, `email`, `password`. Password is hashed with PBKDF2-SHA256 (390,000 iterations) before storage.
-2. **Login** — `POST /auth/login` returns a signed HS256 JWT with `sub` (user ID), `email`, and `exp` claims.
-3. **Authorize** — Send `Authorization: Bearer <token>` on protected requests.
-4. **Verify** — `get_current_user` in `app/dependencies.py` decodes the token, validates the signature, checks expiry, and loads the user from the database.
+2. **Seed admin** — On startup, the app creates a default `admin` account only if the database has no users yet.
+3. **Assign role** — Later registered accounts default to `user`.
+4. **Login** — `POST /auth/login` returns a signed HS256 JWT with `sub` (user ID), `email`, and `exp` claims.
+5. **Authorize** — Send `Authorization: Bearer <token>` on protected requests.
+6. **Verify** — `get_current_user` in `app/dependencies.py` decodes the token, validates the signature, checks expiry, and loads the user from the database.
+
+## Role Behavior
+
+- `admin` users can view and manage all accounts.
+- `user` accounts can view the directory and manage only their own record.
+- The frontend mirrors these backend permissions, but the backend remains the source of truth.
+
+## Default Admin Credentials
+
+- Email: `admin@user-management.local`
+- Password: `Admin@12345`
+- These can be changed with `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, and `DEFAULT_ADMIN_PASSWORD` in `.env`.
+- The seed runs only when the database is empty, so existing installations are left untouched.
 
 ## How to Test in `/docs`
 
@@ -178,12 +193,10 @@ If you are studying the code:
 5. `app/dependencies.py` — shared FastAPI deps
 6. `app/routers/users.py` — CRUD routes
 7. `app/routers/auth.py` — login and current-user routes
-8. `app/ai_summary.py` — Hugging Face router client helper
-9. `app/routers/ai.py` — AI summarization endpoint
-10. `app/main.py` — app factory, router wiring
-11. `frontend/src/App.jsx` — React UI
-12. `tests/test_app.py` — test suite
+8. `app/main.py` — app factory, router wiring
+9. `frontend/src/App.jsx` — React UI
+10. `tests/test_app.py` — test suite
 
 ## Learning Note
 
-`app/auth.py` uses only Python's standard library (`hashlib`, `hmac`, `secrets`) so every step of hashing and token signing is visible. The frontend shows controlled React forms, `localStorage` token storage, and `fetch`-based API calls. In production, teams typically use dedicated auth libraries rather than maintaining this logic by hand.
+`app/auth.py` uses only Python's standard library (`hashlib`, `hmac`, `secrets`) so every step of hashing and token signing is visible. The frontend shows controlled React forms, `localStorage` token storage, role-aware dashboard rendering, and `fetch`-based API calls. In production, teams typically use dedicated auth libraries rather than maintaining this logic by hand.
