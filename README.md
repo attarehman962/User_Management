@@ -24,8 +24,10 @@ User_Management/
 │   ├── schemas.py         # Pydantic request/response schemas
 │   ├── auth.py            # Password hashing + JWT (stdlib only)
 │   ├── dependencies.py    # Shared FastAPI deps: get_db, get_current_user
+│   ├── ai_summary.py      # Hugging Face router summarization helper
 │   └── routers/
 │       ├── auth.py        # POST /auth/login  GET /auth/me
+│       ├── ai.py          # POST /ai/summarize
 │       └── users.py       # CRUD /users
 ├── alembic/
 │   ├── env.py
@@ -59,6 +61,7 @@ User_Management/
 | `GET` | `/users/{id}` | Yes | Get a single user by ID |
 | `PUT` | `/users/{id}` | Yes | Update name, email, or password |
 | `DELETE` | `/users/{id}` | Yes | Delete a user |
+| `POST` | `/ai/summarize` | Yes | Summarize text with the Hugging Face router |
 
 Protected endpoints require `Authorization: Bearer <token>`.
 
@@ -76,6 +79,7 @@ Edit `.env`:
 DATABASE_URL=postgresql://user:password@localhost/user_management
 JWT_SECRET_KEY=replace-with-a-long-random-secret
 ACCESS_TOKEN_EXPIRE_MINUTES=60
+HF_TOKEN=your_huggingface_token
 ```
 
 Generate a secure secret:
@@ -174,9 +178,11 @@ If you are studying the code:
 5. `app/dependencies.py` — shared FastAPI deps
 6. `app/routers/users.py` — CRUD routes
 7. `app/routers/auth.py` — login and current-user routes
-8. `app/main.py` — app factory, router wiring
-9. `frontend/src/App.jsx` — React UI
-10. `tests/test_app.py` — test suite
+8. `app/ai_summary.py` — Hugging Face router client helper
+9. `app/routers/ai.py` — AI summarization endpoint
+10. `app/main.py` — app factory, router wiring
+11. `frontend/src/App.jsx` — React UI
+12. `tests/test_app.py` — test suite
 
 ## Learning Note
 

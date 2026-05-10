@@ -66,3 +66,12 @@ class TokenResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+
+class SummaryRequest(BaseModel):
+    text: str = Field(min_length=20, max_length=10000)
+
+
+class SummaryResponse(BaseModel):
+    summary: str

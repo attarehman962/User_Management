@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.database import create_db_and_tables
-from app.routers import auth, users
+from app.routers import ai, auth, users
 
 _FRONTEND_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
 
@@ -33,6 +33,7 @@ if (_FRONTEND_DIST / "assets").exists():
 
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(ai.router)
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)

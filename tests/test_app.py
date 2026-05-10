@@ -20,6 +20,8 @@ _APP_MODULES = (
     "app.dependencies",
     "app.routers.users",
     "app.routers.auth",
+    "app.routers.ai",
+    "app.ai_summary",
     "app.main",
 )
 
@@ -39,10 +41,11 @@ def load_app(database_url: str):
     deps = importlib.import_module("app.dependencies")
     users_router = importlib.import_module("app.routers.users")
     auth_router = importlib.import_module("app.routers.auth")
+    ai_router = importlib.import_module("app.routers.ai")
     main = importlib.import_module("app.main")
 
     database.create_db_and_tables()
-    return database, auth, schemas, models, deps, users_router, auth_router, main
+    return database, auth, schemas, models, deps, users_router, auth_router, ai_router, main
 
 
 class UserManagementTests(unittest.TestCase):
@@ -57,6 +60,7 @@ class UserManagementTests(unittest.TestCase):
             self.deps,
             self.users,
             self.auth_router,
+            self.ai_router,
             self.main,
         ) = load_app(f"sqlite:///{db_path}")
         self.db = self.database.SessionLocal()
@@ -68,6 +72,7 @@ class UserManagementTests(unittest.TestCase):
         os.environ.pop("DATABASE_URL", None)
         os.environ.pop("JWT_SECRET_KEY", None)
         os.environ.pop("ACCESS_TOKEN_EXPIRE_MINUTES", None)
+        os.environ.pop("HF_TOKEN", None)
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -221,6 +226,21 @@ class UserManagementTests(unittest.TestCase):
 
         self.assertEqual(exc.exception.status_code, 409)
         self.assertEqual(exc.exception.detail, "Email already registered")
+
+    def test_ai_summary_requires_hf_token(self):
+        self.create_user()
+        _, current_user = self.get_authenticated_user()
+
+        with self.assertRaises(HTTPException) as exc:
+            self.ai_router.summarize_text(
+                self.schemas.SummaryRequest(
+                    text="This is a long enough paragraph to trigger the summarization validation and test the missing token case."
+                ),
+                current_user,
+            )
+
+        self.assertEqual(exc.exception.status_code, 503)
+        self.assertIn("HF_TOKEN is not set", exc.exception.detail)
 
     def test_missing_user_routes_return_not_found(self):
         self.create_user()

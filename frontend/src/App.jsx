@@ -32,6 +32,10 @@ function App() {
   const [listStatus, setListStatus] = useState({ message: "Login required to load users.", kind: "" });
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
+  const [summaryText, setSummaryText] = useState("");
+  const [summaryResult, setSummaryResult] = useState("");
+  const [summaryStatus, setSummaryStatus] = useState({ message: "Login to use AI summarization.", kind: "" });
+  const [isSummarizing, setIsSummarizing] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -211,9 +215,35 @@ function App() {
     }
   }
 
+  async function handleSummarize(event) {
+    event.preventDefault();
+
+    if (!token) {
+      setSummaryStatus({ message: "Login to use AI summarization.", kind: "error" });
+      return;
+    }
+
+    setIsSummarizing(true);
+    setSummaryStatus({ message: "Generating summary...", kind: "" });
+
+    try {
+      const data = await apiRequest("/ai/summarize", {
+        method: "POST",
+        body: JSON.stringify({ text: summaryText }),
+      });
+      setSummaryResult(data.summary);
+      setSummaryStatus({ message: "Summary generated.", kind: "success" });
+    } catch (error) {
+      setSummaryStatus({ message: error.message, kind: "error" });
+    } finally {
+      setIsSummarizing(false);
+    }
+  }
+
   function handleLogout() {
     setToken("");
     setAuthStatus({ message: "Logged out.", kind: "" });
+    setSummaryStatus({ message: "Login to use AI summarization.", kind: "" });
     closeEditor();
   }
 
@@ -383,6 +413,54 @@ function App() {
             )}
           </div>
         </section>
+      </section>
+
+      <section className="panel summary-panel">
+        <div className="toolbar">
+          <div>
+            <h2>AI Summarization</h2>
+            <p className="muted-copy">
+              Paste a long paragraph and summarize it through the Hugging Face router using your HF token.
+            </p>
+          </div>
+        </div>
+
+        <form className="stack" onSubmit={handleSummarize}>
+          <label>
+            Text To Summarize
+            <textarea
+              name="summaryText"
+              rows="8"
+              placeholder="Paste a long article, note, or paragraph here..."
+              value={summaryText}
+              onChange={(event) => setSummaryText(event.target.value)}
+              minLength="20"
+              required
+            />
+          </label>
+          <div className="user-actions">
+            <button className="primary" type="submit" disabled={!token || isSummarizing}>
+              {isSummarizing ? "Summarizing..." : "Summarize"}
+            </button>
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => {
+                setSummaryText("");
+                setSummaryResult("");
+                setSummaryStatus({ message: token ? "Paste text to summarize." : "Login to use AI summarization.", kind: "" });
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        </form>
+
+        <StatusLine status={summaryStatus} />
+
+        <div className="summary-output">
+          {summaryResult || "Your summary will appear here after the AI request finishes."}
+        </div>
       </section>
 
       {editorForm.id ? (
